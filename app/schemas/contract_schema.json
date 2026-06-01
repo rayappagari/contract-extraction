@@ -2,9 +2,9 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "ContractExtraction",
   "type": "object",
-  "required": ["contract_id", "parties", "effective_date", "expiration_date"],
+  "required": ["parties", "effective_date", "expiration_date"],
   "properties": {
-    "contract_id": { "type": "string" },
+    "contract_id": { "type": ["string", "null"] },
     "contract_type": { "type": "string", "enum": ["MSA", "SOW", "NDA", "Amendment", "PO", "Other"] },
     "parties": {
       "type": "array",
