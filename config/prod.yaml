@@ -1,0 +1,32 @@
+environment: prod
+
+claude:
+  model: claude-sonnet-4-6
+  max_tokens: 4096
+  max_retries: 5
+
+s3:
+  bucket: contract-extraction-prod
+  prefix: contracts/
+  region: us-east-1
+
+snowflake:
+  account: ${SNOWFLAKE_ACCOUNT}
+  user: ${SNOWFLAKE_USER}
+  password: ${SNOWFLAKE_PASSWORD}
+  warehouse: PROD_WH
+  database: CONTRACTS_PROD
+  schema: EXTRACTED
+
+sqs:
+  queue_url: ${SQS_QUEUE_URL_PROD}
+  region: us-east-1
+
+pipeline:
+  max_workers: 8
+  confidence_threshold: 0.85
+  chunk_size: 4000
+  chunk_overlap: 200
+
+logging:
+  level: WARNING
