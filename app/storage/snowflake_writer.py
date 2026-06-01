@@ -1,4 +1,16 @@
 import json
+import platform
+
+# Workaround for Snowflake connector bug on Windows Store Python:
+# platform.libc_ver() tries to open the executable and fails on sandboxed installs.
+_orig_libc_ver = platform.libc_ver
+def _safe_libc_ver(*args, **kwargs):
+    try:
+        return _orig_libc_ver(*args, **kwargs)
+    except OSError:
+        return ("", "")
+platform.libc_ver = _safe_libc_ver
+
 import snowflake.connector
 
 
@@ -11,15 +23,21 @@ SCALAR_TERMS = [
 
 class SnowflakeWriter:
     def __init__(self, account: str, user: str, password: str, warehouse: str, database: str, schema: str):
+        self.database = database
+        self.schema = schema
         self.conn = snowflake.connector.connect(
             account=account, user=user, password=password,
-            warehouse=warehouse, database=database, schema=schema,
+            warehouse=warehouse,
         )
 
     def create_tables_if_not_exist(self) -> None:
         import pathlib
-        ddl = (pathlib.Path(__file__).parents[2] / "sql" / "create_tables.sql").read_text()
         cursor = self.conn.cursor()
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {self.database}")
+        cursor.execute(f"USE DATABASE {self.database}")
+        cursor.execute(f"CREATE SCHEMA IF NOT EXISTS {self.schema}")
+        cursor.execute(f"USE SCHEMA {self.schema}")
+        ddl = (pathlib.Path(__file__).parents[2] / "sql" / "create_tables.sql").read_text()
         for statement in ddl.split(";"):
             stmt = statement.strip()
             if stmt:
@@ -27,9 +45,16 @@ class SnowflakeWriter:
         self.conn.commit()
         cursor.close()
 
+    def _use_context(self) -> None:
+        cursor = self.conn.cursor()
+        cursor.execute(f"USE DATABASE {self.database}")
+        cursor.execute(f"USE SCHEMA {self.schema}")
+        cursor.close()
+
     def write_contract(self, contract_id: str, source_file: str, data: dict, scores: dict,
                        model_version: str, needs_review: bool,
                        validation_errors: list, anomalies: list, rule_violations: list) -> None:
+        self._use_context()
         self._write_header(contract_id, source_file, data)
         self._write_terms(contract_id, data)
         self._write_audit(contract_id, model_version, scores, needs_review,
@@ -86,7 +111,7 @@ class SnowflakeWriter:
             INSERT INTO CONTRACT_EXTRACTION_AUDIT
                 (contract_id, model_version, confidence, needs_review,
                  validation_errors, anomalies, rule_violations)
-            VALUES (%s, %s, %s, %s, PARSE_JSON(%s), PARSE_JSON(%s), PARSE_JSON(%s))
+            SELECT %s, %s, %s, %s, PARSE_JSON(%s), PARSE_JSON(%s), PARSE_JSON(%s)
             """,
             (
                 contract_id,
